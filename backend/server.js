@@ -10,7 +10,10 @@ const { errorHandler } = require('./middleware/errorHandler');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+// Χρήση του PORT που δίνει το Railway
+// Railway θέτει αυτόματα τη μεταβλητή PORT
+const PORT = process.env.PORT || process.env.RAILWAY_PORT || 8080;
 
 // Middleware
 app.use(cors());
@@ -18,7 +21,11 @@ app.use(express.json());
 
 // Διαδρομές
 app.get('/', (req, res) => {
-  res.json({ message: 'Καλώς ήρθατε στο API του Restaurant Reservation App' });
+  res.json({ 
+    message: 'Καλώς ήρθατε στο API του Restaurant Reservation App',
+    env: process.env.NODE_ENV,
+    port: PORT
+  });
 });
 
 // Έλεγχος σύνδεσης με τη βάση δεδομένων
@@ -40,6 +47,7 @@ app.use('/api/reservations', reservationRoutes);
 app.use(errorHandler);
 
 // Εκκίνηση του server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Ο διακομιστής τρέχει στη θύρα ${PORT}`);
+  console.log('Περιβάλλον:', process.env.NODE_ENV || 'development');
 }); 
