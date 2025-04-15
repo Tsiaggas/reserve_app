@@ -25,27 +25,46 @@ try {
 function extractSupabaseInfo() {
   try {
     const connectionString = process.env.PG_CONNECTION_STRING || process.env.DATABASE_URL;
-    if (!connectionString) return null;
+    if (!connectionString) {
+      console.log('Δεν βρέθηκε connection string');
+      return {
+        url: 'https://xsmychmezexlfspklacl.supabase.co',
+        key: process.env.SUPABASE_ANON_KEY
+      };
+    }
     
     // Εξαγωγή host από το connection string
     const hostMatch = connectionString.match(/@([^:]+):/);
-    if (!hostMatch || !hostMatch[1]) return null;
+    if (!hostMatch || !hostMatch[1]) {
+      console.log('Αδυναμία εξαγωγής host από το connection string, χρήση προεπιλογής');
+      return {
+        url: 'https://xsmychmezexlfspklacl.supabase.co',
+        key: process.env.SUPABASE_ANON_KEY
+      };
+    }
     
     const host = hostMatch[1];
-    // Το project ID είναι το πρώτο τμήμα του host
+    
+    // Διόρθωση - το πρώτο μέρος πριν το .supabase.co είναι το project ID
     const projectId = host.split('.')[0];
+    
+    // Το σωστό URL περιέχει το project ID και όχι το "db"
+    const url = `https://${projectId}.supabase.co`;
+    console.log(`Διαμορφωμένο Supabase REST URL: ${url}`);
     
     return {
       host,
       projectId,
-      // Συνθέτουμε το Supabase URL
-      url: `https://${projectId}.supabase.co`,
-      // Χρειάζεται να ορίσετε αυτό το κλειδί στο .env.supabase
-      key: process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzbXljaG1lemV4bGZzcGtsYWNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTg0NDAyNDksImV4cCI6MjAzNDAxNjI0OX0._ULj1NOAkCh5BcCUfyjvqf9lh-qUAfYx7y7IbGKPMsM'
+      url: url,
+      key: process.env.SUPABASE_ANON_KEY
     };
   } catch (error) {
     console.error('Σφάλμα εξαγωγής πληροφοριών Supabase:', error);
-    return null;
+    // Fallback σε σκληρά κωδικοποιημένες τιμές
+    return {
+      url: 'https://xsmychmezexlfspklacl.supabase.co',
+      key: process.env.SUPABASE_ANON_KEY
+    };
   }
 }
 
@@ -60,7 +79,13 @@ const supabase = axios.create({
     'Authorization': `Bearer ${supabaseInfo?.key}`,
     'Content-Type': 'application/json'
   },
-  timeout: 10000
+  timeout: 10000,
+  // Ρυθμίσεις για IPv4
+  family: 4,
+  // Αποτροπή σφαλμάτων πιστοποιητικού
+  httpsAgent: new (require('https').Agent)({
+    rejectUnauthorized: false
+  })
 });
 
 // Συναρτήσεις για αλληλεπίδραση με τον πίνακα users
@@ -212,12 +237,45 @@ function extractTableFromQuery(query) {
 // Δοκιμή σύνδεσης
 const testConnection = async () => {
   try {
-    // Απλό ερώτημα health check
-    const response = await supabase.get('rest/v1/');
+    console.log(`Δοκιμή σύνδεσης REST API στο ${supabaseInfo?.url}...`);
+    
+    // Απλό ερώτημα health check - το /rest/v1/ δεν είναι κατάλληλο endpoint
+    // Χρησιμοποιούμε το /rest/v1/users αντί για απλό /rest/v1/
+    const response = await supabase.get('/rest/v1/users?limit=1');
+    
     console.log('ΕΠΙΤΥΧΗΣ ΣΥΝΔΕΣΗ με το Supabase REST API!');
+    console.log(`Κωδικός απάντησης: ${response.status}`);
+    
+    if (response.data && Array.isArray(response.data)) {
+      console.log(`Πλήθος αποτελεσμάτων: ${response.data.length}`);
+    }
+    
     return true;
   } catch (error) {
-    console.error('ΣΦΑΛΜΑ ΣΥΝΔΕΣΗΣ με το Supabase REST API:', error);
+    console.error('ΣΦΑΛΜΑ ΣΥΝΔΕΣΗΣ με το Supabase REST API:');
+    
+    // Λεπτομερής καταγραφή σφάλματος
+    if (error.response) {
+      // Λάβαμε απάντηση από τον server με κωδικό σφάλματος
+      console.error(`Κωδικός απάντησης: ${error.response.status}`);
+      console.error('Δεδομένα απάντησης:', error.response.data);
+      console.error('Headers απάντησης:', error.response.headers);
+    } else if (error.request) {
+      // Έγινε αίτημα αλλά δεν λάβαμε απάντηση
+      console.error('Δεν λάβαμε απάντηση από το server');
+      console.error('Λεπτομέρειες αιτήματος:', error.request);
+    } else {
+      // Κάτι άλλο προκάλεσε σφάλμα
+      console.error('Μήνυμα σφάλματος:', error.message);
+    }
+    
+    // Έλεγχος για σφάλματα DNS
+    if (error.code === 'ENOTFOUND') {
+      console.error(`Το hostname ${error.hostname || supabaseInfo?.url} δεν βρέθηκε - πιθανό πρόβλημα DNS`);
+      console.error('Δοκιμάστε να προσπελάσετε το URL μέσω προγράμματος περιήγησης για να επιβεβαιώσετε ότι λειτουργεί');
+    }
+    
+    console.error('Στοίβα σφάλματος:', error.stack);
     return false;
   }
 };

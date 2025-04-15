@@ -17,6 +17,10 @@ try {
 // Ρύθμιση περιβάλλοντος IPv4
 process.env.NODE_OPTIONS = '--dns-result-order=ipv4first';
 
+// Αναγκαστική χρήση IPv4 για όλες τις συνδέσεις HTTP
+require('https').globalAgent.options.family = 4;
+require('http').globalAgent.options.family = 4;
+
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -75,7 +79,15 @@ try {
 }
 
 // Φόρτωση των modules με χειρισμό σφαλμάτων
-let db, authRoutes, restaurantRoutes, reservationRoutes, errorHandler;
+let db, authRoutes, restaurantRoutes, reservationRoutes, errorHandler, simpleApiRoutes;
+
+// Νέο API με REST
+try {
+  simpleApiRoutes = require('./routes-api');
+  console.log('Module routes-api φορτώθηκε επιτυχώς');
+} catch (e) {
+  console.error('Σφάλμα φόρτωσης routes-api:', e);
+}
 
 // Πρώτα δοκιμάζουμε το REST API client
 try {
@@ -152,6 +164,11 @@ app.get('/', (req, res) => {
 });
 
 // Διαδρομές
+if (simpleApiRoutes) {
+  app.use('/api/v2', simpleApiRoutes);
+  console.log('Χρησιμοποιείται το νέο REST API στο /api/v2');
+}
+
 app.use('/api/auth', authRoutes);
 app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/reservations', reservationRoutes);
