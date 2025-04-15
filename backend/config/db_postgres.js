@@ -1,47 +1,65 @@
 const { Pool } = require('pg');
 const dotenv = require('dotenv');
 
-dotenv.config();
+// Φόρτωση των μεταβλητών περιβάλλοντος από το .env.supabase
+dotenv.config({ path: '.env.supabase' });
 
-console.log('Προσπάθεια σύνδεσης στη βάση δεδομένων με DATABASE_URL');
+// Ρύθμιση του χρόνου σύνδεσης
+const connectionTimeoutMs = 5000;
 
-// Δημιουργία σύνδεσης με τη PostgreSQL βάση δεδομένων
+// Εμφάνιση πληροφοριών για το DATABASE_URL
+if (process.env.DATABASE_URL) {
+  console.log('Χρησιμοποιείται το DATABASE_URL από τις μεταβλητές περιβάλλοντος');
+} else {
+  console.warn('ΠΡΟΣΟΧΗ: Δεν έχει οριστεί το DATABASE_URL. Ελέγξτε το αρχείο .env.supabase');
+}
+
+// Δημιουργία του pool σύνδεσης
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false // Απαραίτητο για το Supabase
-  },
-  connectionTimeoutMillis: 10000, // 10 seconds
-  statement_timeout: 10000 // 10 seconds
+  ssl: process.env.DATABASE_REQUIRES_SSL === 'true' ? 
+    { rejectUnauthorized: false } : false,
+  connectionTimeoutMillis: connectionTimeoutMs,
 });
 
-// Wrapper method για συμβατότητα με το υπάρχον κώδικα
-const originalQuery = pool.query;
-pool.query = async (text, params) => {
-  try {
-    console.log('Εκτέλεση ερωτήματος:', text);
-    const result = await originalQuery.call(pool, text, params);
-    // Επιστροφή σε μορφή παρόμοια με mysql2 για συμβατότητα
-    return [result.rows, result.fields];
-  } catch (error) {
-    console.error('Σφάλμα στην εκτέλεση ερωτήματος:', error);
-    throw error;
-  }
+// Εξαγωγή της μεθόδου ερωτημάτων
+const query = (text, params) => {
+  console.log(`Εκτέλεση ερωτήματος: ${text}`);
+  return pool.query(text, params);
 };
 
-// Δοκιμή σύνδεσης
+// Συνάρτηση για έλεγχο της σύνδεσης
 const testConnection = async () => {
+  console.log(`[${new Date().toISOString()}] Έλεγχος σύνδεσης με τη βάση δεδομένων...`);
+  const startTime = Date.now();
+
   try {
     const client = await pool.connect();
-    console.log('Επιτυχής σύνδεση στη βάση δεδομένων PostgreSQL');
-    const res = await client.query('SELECT NOW()');
-    console.log('Αποτέλεσμα δοκιμαστικού ερωτήματος:', res.rows[0]);
+    console.log(`[${new Date().toISOString()}] Επιτυχής σύνδεση με τη βάση δεδομένων (${Date.now() - startTime}ms)`);
+    
+    try {
+      // Έλεγχος για πίνακα users
+      const userCount = await client.query('SELECT COUNT(*) FROM users');
+      console.log(`[${new Date().toISOString()}] Αριθμός χρηστών στη βάση: ${userCount.rows[0].count}`);
+    } catch (tableError) {
+      console.warn(`[${new Date().toISOString()}] Ο πίνακας users δεν υπάρχει ακόμα: ${tableError.message}`);
+    }
+    
     client.release();
     return true;
   } catch (error) {
-    console.error('Σφάλμα σύνδεσης στη βάση δεδομένων:', error);
+    console.error(`[${new Date().toISOString()}] Σφάλμα σύνδεσης με τη βάση δεδομένων (${Date.now() - startTime}ms):`);
+    console.error(`Μήνυμα: ${error.message}`);
+    console.error(`Στοίβα: ${error.stack}`);
     return false;
   }
 };
 
-module.exports = { pool, testConnection }; 
+// Εκτέλεση ελέγχου σύνδεσης κατά την εκκίνηση
+testConnection();
+
+module.exports = {
+  query,
+  testConnection,
+  pool
+}; 

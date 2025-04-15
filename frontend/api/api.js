@@ -1,12 +1,11 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// API URL - ΠΡΟΣΟΧΗ: Αλλάξτε την παρακάτω διεύθυνση με την πραγματική IP του υπολογιστή σας
-// στο τοπικό δίκτυο (π.χ. 192.168.1.5) αντί για localhost
-const API_URL = 'http://192.168.2.6:5000'; // <-- ΑΛΛΑΞΤΕ ΤΟ "192.168.1.x" ΜΕ ΤΗΝ ΠΡΑΓΜΑΤΙΚΗ ΣΑΣ IP!
+// API_URL για παραγωγικό περιβάλλον (Railway)
+const API_URL = 'https://reserveapp-production.up.railway.app';
 
-// Εναλλακτικά, μπορείτε να χρησιμοποιήσετε την ngrok για να εκθέσετε τον server σας παγκοσμίως
-// const API_URL = 'https://your-ngrok-url.ngrok.io';
+// Για τοπική ανάπτυξη, μπορείτε να χρησιμοποιήσετε την IP σας:
+// const API_URL = 'http://192.168.2.6:5000';
 
 // Δημιουργία axios instance
 const api = axios.create({
