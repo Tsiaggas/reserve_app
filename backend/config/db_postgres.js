@@ -2,6 +2,10 @@ const { Pool } = require('pg');
 const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
+const dns = require('dns');
+
+// Ορισμός IPv4 ως προεπιλογή
+dns.setDefaultResultOrder('ipv4first');
 
 // Φόρτωση των μεταβλητών περιβάλλοντος από το .env.supabase
 try {
@@ -19,7 +23,7 @@ try {
 }
 
 // Ρύθμιση του χρόνου σύνδεσης
-const connectionTimeoutMs = 5000;
+const connectionTimeoutMs = 10000; // αύξηση στα 10 δευτερόλεπτα
 
 // Εμφάνιση πληροφοριών για το DATABASE_URL
 if (process.env.DATABASE_URL) {
@@ -38,14 +42,40 @@ if (connectionString && connectionString.includes('!') || connectionString.inclu
   console.log('Κωδικοποιημένο URL:', connectionString.substring(0, 25) + '...');
 }
 
+// Προσθήκη των ipversion=4 και sslmode=require αν δεν υπάρχουν ήδη
+if (connectionString && !connectionString.includes('ipversion=4')) {
+  const separator = connectionString.includes('?') ? '&' : '?';
+  connectionString += `${separator}ipversion=4`;
+  console.log('Προστέθηκε ipversion=4 στο URL');
+}
+
+if (connectionString && !connectionString.includes('sslmode=')) {
+  const separator = connectionString.includes('?') ? '&' : '?';
+  connectionString += `${separator}sslmode=require`;
+  console.log('Προστέθηκε sslmode=require στο URL');
+}
+
+console.log('Τελικό connection string:', connectionString ? connectionString.substring(0, 40) + '...' : 'undefined');
+
 // Δημιουργία του pool σύνδεσης
-const pool = new Pool({
+const poolConfig = {
   connectionString: connectionString,
   ssl: {
-    rejectUnauthorized: false // Πάντα false για το Supabase
+    rejectUnauthorized: false, // Πάντα false για το Supabase
   },
   connectionTimeoutMillis: connectionTimeoutMs,
-});
+  // Μέγιστος αριθμός προσπαθειών επανασύνδεσης
+  max: 10,
+  idleTimeoutMillis: 30000,
+  // Προσθήκη callbacks για καλύτερο debugging
+  error: (err, client) => {
+    console.error('Σφάλμα στο pool σύνδεσης:', err);
+  }
+};
+
+console.log('Ρυθμίσεις pool:', JSON.stringify(poolConfig, null, 2).replace(connectionString, '***SECRET***'));
+
+const pool = new Pool(poolConfig);
 
 // Εξαγωγή της μεθόδου ερωτημάτων
 const query = (text, params) => {
@@ -59,6 +89,7 @@ const testConnection = async () => {
   const startTime = Date.now();
 
   try {
+    console.log('Προσπάθεια σύνδεσης...');
     const client = await pool.connect();
     console.log(`[${new Date().toISOString()}] Επιτυχής σύνδεση με τη βάση δεδομένων (${Date.now() - startTime}ms)`);
     
@@ -76,6 +107,13 @@ const testConnection = async () => {
     console.error(`[${new Date().toISOString()}] Σφάλμα σύνδεσης με τη βάση δεδομένων (${Date.now() - startTime}ms):`);
     console.error(`Μήνυμα: ${error.message}`);
     console.error(`Στοίβα: ${error.stack}`);
+    // Περισσότερες πληροφορίες για σφάλματα δικτύου
+    if (error.code === 'ENETUNREACH' || error.code === 'ENOTFOUND') {
+      console.error('Σφάλμα δικτύου! Δοκιμάστε τα εξής:');
+      console.error('1. Βεβαιωθείτε ότι επιτρέπονται συνδέσεις από παντού στο Supabase');
+      console.error('2. Βεβαιωθείτε ότι το Railway επιτρέπει εξερχόμενες συνδέσεις');
+      console.error('3. Προσθέστε το ?ipversion=4 στο connection string');
+    }
     return false;
   }
 };
