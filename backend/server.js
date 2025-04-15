@@ -77,17 +77,28 @@ try {
 // Φόρτωση των modules με χειρισμό σφαλμάτων
 let db, authRoutes, restaurantRoutes, reservationRoutes, errorHandler;
 
+// Πρώτα δοκιμάζουμε το REST API client
 try {
-  db = require('./config/db');
-  console.log('Module db φορτώθηκε');
+  db = require('./config/supabase-client');
+  console.log('Module supabase-client φορτώθηκε επιτυχώς');
 } catch (e) {
-  console.error('Σφάλμα φόρτωσης db:', e);
+  console.error('Σφάλμα φόρτωσης supabase-client:', e);
+  
+  // Εναλλακτικά δοκιμάζουμε το κανονικό db.js
   try {
-    db = require('./config/db_postgres');
-    console.log('Module db_postgres φορτώθηκε ως fallback');
-  } catch (pg_e) {
-    console.error('Σφάλμα φόρτωσης db_postgres:', pg_e);
-    process.exit(1);
+    db = require('./config/db');
+    console.log('Module db φορτώθηκε');
+  } catch (dbError) {
+    console.error('Σφάλμα φόρτωσης db:', dbError);
+    
+    // Τέλος δοκιμάζουμε το db_postgres
+    try {
+      db = require('./config/db_postgres');
+      console.log('Module db_postgres φορτώθηκε ως fallback');
+    } catch (pgError) {
+      console.error('Σφάλμα φόρτωσης db_postgres:', pgError);
+      process.exit(1);
+    }
   }
 }
 
