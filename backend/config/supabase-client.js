@@ -7,83 +7,45 @@ const axios = require('axios');
 const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 
-// Φόρτωση περιβαλλοντικών μεταβλητών
+// Έλεγχος και καταγραφή της τρέχουσας διεύθυνσης
+console.log('-------- ΔΙΑΓΝΩΣΤΙΚΑ SUPABASE-CLIENT --------');
 try {
-  const envPath = path.resolve(__dirname, '../.env.supabase');
-  if (fs.existsSync(envPath)) {
-    dotenv.config({ path: envPath });
-  } else {
-    dotenv.config();
-  }
+  const dns = require('dns');
+  dns.lookup('xsmychmezexlfspklacl.supabase.co', {all: true}, (err, addresses) => {
+    if (err) {
+      console.error('Σφάλμα DNS lookup:', err);
+    } else {
+      console.log('Διευθύνσεις για xsmychmezexlfspklacl.supabase.co:', addresses);
+    }
+  });
 } catch (e) {
-  console.error('Σφάλμα φόρτωσης περιβάλλοντος:', e);
-  dotenv.config();
+  console.error('Σφάλμα DNS check:', e);
 }
 
-// Εξαγωγή project URL και anon key από το connection string
-function extractSupabaseInfo() {
-  try {
-    const connectionString = process.env.PG_CONNECTION_STRING || process.env.DATABASE_URL;
-    if (!connectionString) {
-      console.log('Δεν βρέθηκε connection string');
-      return {
-        url: 'https://xsmychmezexlfspklacl.supabase.co',
-        key: process.env.SUPABASE_ANON_KEY
-      };
-    }
-    
-    // Εξαγωγή host από το connection string
-    const hostMatch = connectionString.match(/@([^:]+):/);
-    if (!hostMatch || !hostMatch[1]) {
-      console.log('Αδυναμία εξαγωγής host από το connection string, χρήση προεπιλογής');
-      return {
-        url: 'https://xsmychmezexlfspklacl.supabase.co',
-        key: process.env.SUPABASE_ANON_KEY
-      };
-    }
-    
-    const host = hostMatch[1];
-    
-    // Διόρθωση - το πρώτο μέρος πριν το .supabase.co είναι το project ID
-    const projectId = host.split('.')[0];
-    
-    // Το σωστό URL περιέχει το project ID και όχι το "db"
-    const url = `https://${projectId}.supabase.co`;
-    console.log(`Διαμορφωμένο Supabase REST URL: ${url}`);
-    
-    return {
-      host,
-      projectId,
-      url: url,
-      key: process.env.SUPABASE_ANON_KEY
-    };
-  } catch (error) {
-    console.error('Σφάλμα εξαγωγής πληροφοριών Supabase:', error);
-    // Fallback σε σκληρά κωδικοποιημένες τιμές
-    return {
-      url: 'https://xsmychmezexlfspklacl.supabase.co',
-      key: process.env.SUPABASE_ANON_KEY
-    };
-  }
-}
+// HARDCODED VALUES - ΠΡΟΣΩΡΙΝΗ ΛΥΣΗ
+const SUPABASE_URL = 'https://xsmychmezexlfspklacl.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzbXljaG1lemV4bGZzcGtsYWNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTg0NDAyNDksImV4cCI6MjAzNDAxNjI0OX0._ULj1NOAkCh5BcCUfyjvqf9lh-qUAfYx7y7IbGKPMsM';
 
-const supabaseInfo = extractSupabaseInfo();
-console.log('Supabase Info:', supabaseInfo);
+console.log('ΧΡΗΣΗ HARDCODED ΤΙΜΩΝ:');
+console.log('URL:', SUPABASE_URL);
+console.log('ANON KEY:', SUPABASE_ANON_KEY ? SUPABASE_ANON_KEY.substring(0, 20) + '...' : 'undefined');
 
-// Δημιουργία του Axios client για το Supabase
+// Δημιουργία του Axios client για το Supabase με hardcoded τιμές
 const supabase = axios.create({
-  baseURL: supabaseInfo?.url,
+  baseURL: SUPABASE_URL,
   headers: {
-    'apikey': supabaseInfo?.key,
-    'Authorization': `Bearer ${supabaseInfo?.key}`,
-    'Content-Type': 'application/json'
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
   },
-  timeout: 10000,
+  timeout: 15000,
   // Ρυθμίσεις για IPv4
   family: 4,
   // Αποτροπή σφαλμάτων πιστοποιητικού
-  httpsAgent: new (require('https').Agent)({
+  httpsAgent: new https.Agent({
     rejectUnauthorized: false
   })
 });
@@ -237,11 +199,23 @@ function extractTableFromQuery(query) {
 // Δοκιμή σύνδεσης
 const testConnection = async () => {
   try {
-    console.log(`Δοκιμή σύνδεσης REST API στο ${supabaseInfo?.url}...`);
+    console.log(`Δοκιμή σύνδεσης REST API στο ${SUPABASE_URL}...`);
     
-    // Απλό ερώτημα health check - το /rest/v1/ δεν είναι κατάλληλο endpoint
-    // Χρησιμοποιούμε το /rest/v1/users αντί για απλό /rest/v1/
-    const response = await supabase.get('/rest/v1/users?limit=1');
+    // Προσπαθούμε να συνδεθούμε με το API της Supabase REST
+    const response = await axios({
+      method: 'get',
+      url: `${SUPABASE_URL}/rest/v1/users?limit=1`,
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      },
+      timeout: 15000,
+      // Απαραίτητο για IPv4 σε περιβάλλοντα που προτιμούν IPv6
+      family: 4,
+      httpsAgent: new https.Agent({
+        rejectUnauthorized: false
+      })
+    });
     
     console.log('ΕΠΙΤΥΧΗΣ ΣΥΝΔΕΣΗ με το Supabase REST API!');
     console.log(`Κωδικός απάντησης: ${response.status}`);
@@ -263,7 +237,8 @@ const testConnection = async () => {
     } else if (error.request) {
       // Έγινε αίτημα αλλά δεν λάβαμε απάντηση
       console.error('Δεν λάβαμε απάντηση από το server');
-      console.error('Λεπτομέρειες αιτήματος:', error.request);
+      console.error('Λεπτομέρειες αιτήματος:', 
+        JSON.stringify(error.request).substring(0, 200));
     } else {
       // Κάτι άλλο προκάλεσε σφάλμα
       console.error('Μήνυμα σφάλματος:', error.message);
@@ -271,16 +246,22 @@ const testConnection = async () => {
     
     // Έλεγχος για σφάλματα DNS
     if (error.code === 'ENOTFOUND') {
-      console.error(`Το hostname ${error.hostname || supabaseInfo?.url} δεν βρέθηκε - πιθανό πρόβλημα DNS`);
+      console.error(`Το hostname ${error.hostname || SUPABASE_URL} δεν βρέθηκε - πιθανό πρόβλημα DNS`);
       console.error('Δοκιμάστε να προσπελάσετε το URL μέσω προγράμματος περιήγησης για να επιβεβαιώσετε ότι λειτουργεί');
     }
     
-    console.error('Στοίβα σφάλματος:', error.stack);
+    // Περιορισμένο stack trace για λιγότερα logs
+    if (error.stack) {
+      console.error('Στοίβα σφάλματος:', 
+        error.stack.split('\n').slice(0, 3).join('\n'));
+    }
+    
     return false;
   }
 };
 
 // Εκτέλεση δοκιμαστικής σύνδεσης
+console.log('Δοκιμάζουμε τη σύνδεση με το Supabase REST API...');
 testConnection()
   .then(success => {
     if (success) {
@@ -290,8 +271,10 @@ testConnection()
     }
   })
   .catch(err => {
-    console.error('Εξαίρεση κατά τη δοκιμή σύνδεσης:', err);
+    console.error('Εξαίρεση κατά τη δοκιμή σύνδεσης:', err.message);
   });
+
+console.log('-------- ΤΕΛΟΣ ΔΙΑΓΝΩΣΤΙΚΩΝ SUPABASE-CLIENT --------');
 
 module.exports = {
   query,

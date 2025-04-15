@@ -167,6 +167,13 @@ app.get('/', (req, res) => {
 if (simpleApiRoutes) {
   app.use('/api/v2', simpleApiRoutes);
   console.log('Χρησιμοποιείται το νέο REST API στο /api/v2');
+  console.log('Διαθέσιμα νέα endpoints:');
+  console.log('- GET /api/v2/test - Απλός έλεγχος λειτουργίας');
+  console.log('- GET /api/v2/diagnostics - Αναλυτικά διαγνωστικά');
+  console.log('- GET /api/v2/connection-test - Έλεγχος σύνδεσης με Supabase REST API');
+  console.log('- GET /api/v2/restaurants - Λίστα εστιατορίων');
+  console.log('- POST /api/v2/users/register - Εγγραφή χρήστη');
+  console.log('- POST /api/v2/users/login - Σύνδεση χρήστη');
 }
 
 app.use('/api/auth', authRoutes);

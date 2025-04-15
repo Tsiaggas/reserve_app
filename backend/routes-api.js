@@ -9,12 +9,51 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const supabase = require('./config/supabase-client');
 
+// Διαγνωστική διαδρομή
+router.get('/diagnostics', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    environment: {
+      nodeEnv: process.env.NODE_ENV || 'development',
+      port: process.env.PORT || '8080'
+    },
+    supabase: {
+      url: 'https://xsmychmezexlfspklacl.supabase.co',
+      keyDefined: !!process.env.SUPABASE_ANON_KEY,
+      version: 'direct-rest-api'
+    },
+    message: 'Το simple-api λειτουργεί κανονικά'
+  });
+});
+
 // Διαδρομή για test
 router.get('/test', (req, res) => {
   res.json({ 
     message: 'Το API λειτουργεί (simple-api)',
     timestamp: new Date().toISOString()
   });
+});
+
+// Διαδρομή για έλεγχο συνδεσιμότητας REST API
+router.get('/connection-test', async (req, res) => {
+  try {
+    // Εκτέλεση δοκιμαστικής σύνδεσης
+    const result = await supabase.testConnection();
+    
+    res.json({
+      success: result,
+      message: result ? 'Επιτυχής σύνδεση με REST API' : 'Αποτυχία σύνδεσης με REST API',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Σφάλμα κατά τον έλεγχο σύνδεσης',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Διαδρομές για χρήστες
