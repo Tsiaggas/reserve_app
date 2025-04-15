@@ -2,10 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { testConnection, pool } = require('./config/db_postgres');
-const authRoutes = require('./routes/auth');
-const restaurantRoutes = require('./routes/restaurants');
-const reservationRoutes = require('./routes/reservations');
-const errorHandler = require('./middleware/error');
+const authRoutes = require('./routes/authRoutes');
+const restaurantRoutes = require('./routes/restaurantRoutes');
+const reservationRoutes = require('./routes/reservationRoutes');
+const { errorHandler } = require('./middleware/errorHandler');
 
 // Φόρτωση των μεταβλητών περιβάλλοντος από το .env.supabase
 dotenv.config({ path: '.env.supabase' });
