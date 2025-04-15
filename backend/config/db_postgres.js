@@ -1,24 +1,49 @@
 const { Pool } = require('pg');
 const dotenv = require('dotenv');
+const path = require('path');
+const fs = require('fs');
 
 // Φόρτωση των μεταβλητών περιβάλλοντος από το .env.supabase
-dotenv.config({ path: '.env.supabase' });
+try {
+  const envPath = path.resolve(__dirname, '../.env.supabase');
+  if (fs.existsSync(envPath)) {
+    console.log('Φόρτωση μεταβλητών από:', envPath);
+    dotenv.config({ path: envPath });
+  } else {
+    console.log('Το αρχείο .env.supabase δεν βρέθηκε, χρήση .env');
+    dotenv.config();
+  }
+} catch (e) {
+  console.error('Σφάλμα κατά τη φόρτωση περιβάλλοντος:', e);
+  dotenv.config(); // Προσπαθούμε με το προεπιλεγμένο .env
+}
 
 // Ρύθμιση του χρόνου σύνδεσης
 const connectionTimeoutMs = 5000;
 
 // Εμφάνιση πληροφοριών για το DATABASE_URL
 if (process.env.DATABASE_URL) {
-  console.log('Χρησιμοποιείται το DATABASE_URL από τις μεταβλητές περιβάλλοντος');
+  console.log('DATABASE_URL είναι ορισμένο:', process.env.DATABASE_URL.substring(0, 25) + '...');
 } else {
   console.warn('ΠΡΟΣΟΧΗ: Δεν έχει οριστεί το DATABASE_URL. Ελέγξτε το αρχείο .env.supabase');
 }
 
+// Διόρθωση του DATABASE_URL αν χρειάζεται
+let connectionString = process.env.DATABASE_URL;
+if (connectionString && connectionString.includes('!') || connectionString.includes('#')) {
+  console.log('Εντοπίστηκαν ειδικοί χαρακτήρες στο URL, γίνεται κωδικοποίηση...');
+  connectionString = connectionString
+    .replace(/!/g, '%21')
+    .replace(/#/g, '%23');
+  console.log('Κωδικοποιημένο URL:', connectionString.substring(0, 25) + '...');
+}
+
 // Δημιουργία του pool σύνδεσης
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_REQUIRES_SSL === 'true' ? 
-    { rejectUnauthorized: false } : false,
+  connectionString: connectionString,
+  ssl: {
+    rejectUnauthorized: false // Πάντα false για το Supabase
+  },
   connectionTimeoutMillis: connectionTimeoutMs,
 });
 
@@ -55,8 +80,13 @@ const testConnection = async () => {
   }
 };
 
-// Εκτέλεση ελέγχου σύνδεσης κατά την εκκίνηση
-testConnection();
+// Βασική δοκιμή σύνδεσης
+console.log('Δοκιμή σύνδεσης με τη βάση δεδομένων...');
+try {
+  testConnection();
+} catch (e) {
+  console.error('Εξαίρεση κατά τη δοκιμή σύνδεσης:', e);
+}
 
 module.exports = {
   query,
