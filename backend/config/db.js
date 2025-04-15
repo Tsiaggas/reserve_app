@@ -5,11 +5,7 @@ dotenv.config();
 
 // Δημιουργία σύνδεσης με τη PostgreSQL βάση δεδομένων
 const pool = new Pool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 5432,
+  connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false // Απαραίτητο για το Supabase
   }
@@ -17,9 +13,14 @@ const pool = new Pool({
 
 // Wrapper method για συμβατότητα με το υπάρχον κώδικα
 pool.query = async (text, params) => {
-  const result = await pool.query(text, params);
-  // Επιστροφή σε μορφή παρόμοια με mysql2 για συμβατότητα
-  return [result.rows, result.fields];
+  try {
+    const result = await pool.query(text, params);
+    // Επιστροφή σε μορφή παρόμοια με mysql2 για συμβατότητα
+    return [result.rows, result.fields];
+  } catch (error) {
+    console.error('Σφάλμα εκτέλεσης ερωτήματος:', error);
+    throw error;
+  }
 };
 
 // Δοκιμή σύνδεσης
