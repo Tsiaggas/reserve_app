@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Restaurant Reservation App",
+    "slug": "restaurant-reservation-app",
+    "version": "1.0.0",
+    "sdkVersion": "48.0.0",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "android": {
+      "package": "com.reserveapp.restaurant",
+      "versionCode": 1
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8c0db871-c7fd-49c2-b26f-4ef2ec5d5390"
+      }
+    }
+  }
+}
