@@ -1,3 +1,6 @@
+// Ρύθμιση περιβάλλοντος IPv4
+process.env.NODE_OPTIONS = '--dns-result-order=ipv4first';
+
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -12,6 +15,22 @@ try {
   if (fs.existsSync(envPath)) {
     console.log('Φόρτωση μεταβλητών από:', envPath);
     dotenv.config({ path: envPath });
+    // Απευθείας φόρτωση του URL βάσης δεδομένων
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, 'utf8');
+      const dbUrlMatch = envContent.match(/DATABASE_URL=([^\n]+)/);
+      if (dbUrlMatch && dbUrlMatch[1]) {
+        let dbUrl = dbUrlMatch[1];
+        // Προσθήκη sslmode και ipversion αν δεν υπάρχουν
+        if (!dbUrl.includes('?')) {
+          dbUrl += '?sslmode=require&ipversion=4';
+        } else if (!dbUrl.includes('ipversion=4')) {
+          dbUrl += '&ipversion=4';
+        }
+        process.env.DATABASE_URL = dbUrl;
+        console.log('DATABASE_URL φορτώθηκε επιτυχώς (μήκος:', dbUrl.length, ')');
+      }
+    }
   } else {
     console.log('Το αρχείο .env.supabase δεν βρέθηκε, χρήση .env');
     dotenv.config();
@@ -43,11 +62,17 @@ try {
 let db, authRoutes, restaurantRoutes, reservationRoutes, errorHandler;
 
 try {
-  db = require('./config/db_postgres');
-  console.log('Module db_postgres φορτώθηκε');
+  db = require('./config/db');
+  console.log('Module db φορτώθηκε');
 } catch (e) {
-  console.error('Σφάλμα φόρτωσης db_postgres:', e);
-  process.exit(1);
+  console.error('Σφάλμα φόρτωσης db:', e);
+  try {
+    db = require('./config/db_postgres');
+    console.log('Module db_postgres φορτώθηκε ως fallback');
+  } catch (pg_e) {
+    console.error('Σφάλμα φόρτωσης db_postgres:', pg_e);
+    process.exit(1);
+  }
 }
 
 try {
