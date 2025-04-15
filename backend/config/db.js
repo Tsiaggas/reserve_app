@@ -4,6 +4,7 @@ process.env.NODE_OPTIONS = '--dns-result-order=ipv4first';
 const { Pool } = require('pg');
 const dotenv = require('dotenv');
 const dns = require('dns');
+const net = require('net');
 
 // Εξαναγκάζουμε IPv4
 dns.setDefaultResultOrder('ipv4first');
@@ -12,11 +13,28 @@ dns.setDefaultResultOrder('ipv4first');
 dotenv.config();
 
 console.log('--------- ΔΙΑΓΝΩΣΤΙΚΑ ΣΥΝΔΕΣΗΣ ---------');
-console.log('DATABASE_URL:', process.env.DATABASE_URL ? 
-  `${process.env.DATABASE_URL.substring(0, 35)}...` : 'Μη ορισμένο');
+
+// Παραποίηση του net module για IPv4
+try {
+  const originalConnect = net.Socket.prototype.connect;
+  net.Socket.prototype.connect = function(options, ...args) {
+    if (typeof options === 'object' && !options.family) {
+      options.family = 4; // Επιλογή IPv4
+      console.log('Επιβολή IPv4 για net.Socket.connect');
+    }
+    return originalConnect.apply(this, [options, ...args]);
+  };
+  console.log('Επιτυχής παραποίηση του Socket.connect');
+} catch (e) {
+  console.error('Αποτυχία παραποίησης του net module:', e);
+}
+
+// Ελέγχουμε πρώτα το PG_CONNECTION_STRING
+let connectionString = process.env.PG_CONNECTION_STRING || process.env.DATABASE_URL;
+console.log('Αρχικό connection string:', connectionString ? 
+  `${connectionString.substring(0, 35)}...` : 'Μη ορισμένο');
 
 // Διόρθωση του connection string για να εξασφαλίσουμε IPv4
-let connectionString = process.env.DATABASE_URL;
 if (connectionString) {
   // Προσθήκη των παραμέτρων IPv4 και SSL αν λείπουν
   if (!connectionString.includes('?')) {
@@ -27,27 +45,70 @@ if (connectionString) {
   if (!connectionString.includes('sslmode=')) {
     connectionString += '&sslmode=require';
   }
-  console.log('Τελικό connectionString:', 
-    `${connectionString.substring(0, 35)}...`);
 }
 
+console.log('Τελικό connection string:', connectionString ? 
+  `${connectionString.substring(0, 35)}...` : 'Μη ορισμένο');
+
+// Απευθείας ρύθμιση για το pg module
+process.env.PGSSLMODE = 'require';
+
 // Δημιουργία σύνδεσης με τη PostgreSQL βάση δεδομένων
-const pool = new Pool({
+const poolConfig = {
   connectionString: connectionString,
   ssl: {
     rejectUnauthorized: false // Απαραίτητο για το Supabase
   },
   keepAlive: true, // Διατήρηση ζωντανής σύνδεσης
   connectionTimeoutMillis: 10000, // 10 δευτερόλεπτα
-});
+  idleTimeoutMillis: 30000,
+  max: 20, // Μέγιστος αριθμός συνδέσεων
+  allowExitOnIdle: false,
+  // Αναγκαστική χρήση IPv4
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT || 5432,
+  // Ειδικές ρυθμίσεις για Railway
+  application_name: 'restaurant_reservation_app',
+  options: `--client-min-messages=warning`,
+};
+
+// Αφαιρούμε ευαίσθητα δεδομένα πριν την εκτύπωση
+const safeConfig = { ...poolConfig };
+if (safeConfig.connectionString) safeConfig.connectionString = '***SECRET***';
+if (safeConfig.password) safeConfig.password = '***SECRET***';
+console.log('Ρυθμίσεις pool:', JSON.stringify(safeConfig, null, 2));
+
+// Εφαρμογή ρυθμίσεων IPv4 για όλες τις συνδέσεις TCP
+const originalCreateConnection = net.createConnection;
+net.createConnection = function() {
+  const args = Array.from(arguments);
+  if (args[0] && typeof args[0] === 'object') {
+    args[0].family = 4;
+  }
+  return originalCreateConnection.apply(this, args);
+};
+
+// Δημιουργία του pool
+const pool = new Pool(poolConfig);
 
 // Καταγραφή σφαλμάτων σύνδεσης
 pool.on('error', (err) => {
   console.error('Σφάλμα στο pool PostgreSQL:', err);
+  if (err.code === 'ENETUNREACH' || err.code === 'ENOTFOUND') {
+    console.error('ΚΡΙΣΙΜΟ: Πρόβλημα δικτύου! Δοκιμάστε εναλλακτική σύνδεση.');
+  }
+});
+
+// Μέθοδος ξεκινήματος νέας σύνδεσης
+pool.on('connect', () => {
+  console.log('Νέα σύνδεση PostgreSQL δημιουργήθηκε');
 });
 
 // Wrapper method για συμβατότητα με το υπάρχον κώδικα
-pool.query = async (text, params) => {
+const query = async (text, params) => {
   try {
     console.log('Εκτέλεση ερωτήματος:', text);
     const result = await pool.query(text, params);
@@ -79,9 +140,10 @@ const testConnection = async () => {
   } catch (error) {
     console.error('ΣΦΑΛΜΑ ΣΥΝΔΕΣΗΣ στη βάση δεδομένων:', error);
     if (error.code === 'ENETUNREACH') {
-      console.error('Το σφάλμα είναι ENETUNREACH. Δοκιμάστε:');
-      console.error('1. Χρήση IPv4 αντί για IPv6');
-      console.error('2. Έλεγχος ότι το Supabase επιτρέπει συνδέσεις από παντού');
+      console.error('ΚΡΙΣΙΜΟ: Το σφάλμα είναι ENETUNREACH.');
+      console.error('1. Το Railway χρησιμοποιεί IPv6 αλλά η βάση επιτρέπει μόνο IPv4');
+      console.error('2. Προσπαθήστε να ενεργοποιήσετε IPv6 στη βάση δεδομένων');
+      console.error('3. Επικοινωνήστε με την υποστήριξη του Railway');
     }
     return false;
   }
@@ -97,4 +159,4 @@ setTimeout(() => {
 
 console.log('--------- ΤΕΛΟΣ ΔΙΑΓΝΩΣΤΙΚΩΝ ---------');
 
-module.exports = { pool, testConnection }; 
+module.exports = { pool, testConnection, query }; 

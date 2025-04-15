@@ -1,3 +1,19 @@
+// Φόρτωση του network-workaround πριν από οτιδήποτε άλλο
+try {
+  require('./network-workaround');
+  console.log('Network workaround φορτώθηκε επιτυχώς');
+} catch (e) {
+  console.error('Αποτυχία φόρτωσης του network-workaround:', e);
+}
+
+// Δοκιμή της HTTP σύνδεσης με το Supabase
+try {
+  require('./supabase-connect');
+  console.log('Supabase HTTP connectivity test φορτώθηκε');
+} catch (e) {
+  console.error('Αποτυχία φόρτωσης του supabase-connect:', e);
+}
+
 // Ρύθμιση περιβάλλοντος IPv4
 process.env.NODE_OPTIONS = '--dns-result-order=ipv4first';
 
